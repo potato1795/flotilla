@@ -256,10 +256,12 @@
         let gameState = {
             player: { x: 400, y: 500, width: 80, height: 40, speed: 300 },
             enemies: [],
+            drones: [],
             selfies: [],
             allyShips: [],
             sunglasses: [],
             selfieCount: 0,
+            gameTime: 0,  // Tiempo total de juego en segundos
             lives: 3,
             immune: false,
             immuneTimer: 0,
@@ -313,7 +315,57 @@
             allyShipSpain: null,
             allyShipItaly: null,
             camera: null,
-            sunglasses: null
+            sunglasses: null,
+            drone: null
+        };
+
+        function createDrone() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 40;
+            canvas.height = 40;
+            const ctx = canvas.getContext('2d');
+
+            // Cuerpo del dron
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.arc(20, 20, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Hélices
+            ctx.strokeStyle = '#95a5a6';
+            ctx.lineWidth = 3;
+            
+            // Hélice 1
+            ctx.beginPath();
+            ctx.moveTo(5, 5);
+            ctx.lineTo(15, 15);
+            ctx.stroke();
+
+            // Hélice 2
+            ctx.beginPath();
+            ctx.moveTo(35, 5);
+            ctx.lineTo(25, 15);
+            ctx.stroke();
+
+            // Hélice 3
+            ctx.beginPath();
+            ctx.moveTo(5, 35);
+            ctx.lineTo(15, 25);
+            ctx.stroke();
+
+            // Hélice 4
+            ctx.beginPath();
+            ctx.moveTo(35, 35);
+            ctx.lineTo(25, 25);
+            ctx.stroke();
+
+            // Luz central
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(20, 20, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            return canvas;
         };
 
         function createSunglasses() {
@@ -581,6 +633,7 @@
         images.allyShipItaly = createAllyShipItaly();
         images.camera = createCamera();
         images.sunglasses = createSunglasses();
+        images.drone = createDrone();
         
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
@@ -620,6 +673,14 @@
                 enemy.y - 25, 
                 70, 60);
         }
+
+        function drawDrone(drone) {
+            ctx.save();
+            ctx.translate(drone.x, drone.y);
+            ctx.rotate(drone.angle || 0);
+            ctx.drawImage(images.drone, drone.x -20, drone.y -20, 40, 40);
+            ctx.restore();
+        }
         
         function drawAllyShip(ship) {
             const img = ship.type === 'spain' ? images.allyShipSpain : images.allyShipItaly;
@@ -643,15 +704,28 @@
                 40, 20);
         }
         
-        function spawnEnemy() {
+        function spawnEnemy(drone) {
             const baseSpeed = ENEMY_BASE_SPEED;
             const speedIncrease = Math.min(gameState.difficulty * 6, 300);
             
-            gameState.enemies.push({
-                x: Math.random() * (canvas.width - 80) + 40,
-                y: -40,
-                speed: baseSpeed + speedIncrease + Math.random() * 60
-            });
+            if (!drone) {
+                gameState.enemies.push({
+                    x: Math.random() * (canvas.width - 80) + 40,
+                    y: -40,
+                    speed: baseSpeed + speedIncrease + Math.random() * 60
+                });
+            } else {
+                //console.log (Math.random() * (canvas.width - 80) + 40)
+                gameState.drones.push({
+                    x: Math.random() * (canvas.width - 80) + 40,
+                    y: -40,
+                    speed: baseSpeed + speedIncrease + Math.random() * 60,
+                    angle: drone.angle,
+                    time: 0,
+                    frequency: 0.02 + Math.random() * 0.03,
+                    amplitude:  baseSpeed + speedIncrease + Math.random() * 30 ,
+                });
+            }
         }
         
         function spawnSunglasses() {
@@ -696,6 +770,9 @@
             const currentTime = Date.now();
             gameState.deltaTime = (currentTime - lastTime) / 1000; // Convertir a segundos
             lastTime = currentTime;
+
+            // Actualizar tiempo total de juego
+            gameState.gameTime += gameState.deltaTime;
             
             // Clear canvas
             ctx.fillStyle = '#2f94c0';
@@ -793,9 +870,8 @@
             const spawnTime = maxSpawn - (maxSpawn - minSpawn) * difficultyCurve;
 
             gameState.enemySpawnTimer += gameState.deltaTime;
-            console.log(`Spawn Time: ${spawnTime.toFixed(2)}s, Timer: ${gameState.enemySpawnTimer.toFixed(2)}s`);
             if (gameState.enemySpawnTimer  * 1.2 > spawnTime) {
-                spawnEnemy();
+                spawnEnemy(false);
                 gameState.enemySpawnTimer = 0;
             }
                         
@@ -833,6 +909,43 @@
                 return true;
             });
             
+            // Spawn drones after 1 minute
+            if (gameState.gameTime > 60 && gameState.drones.length < Math.min(3 + Math.floor(gameState.difficulty * 0.3), 8)) {
+                if (Math.random() < 0.02) { // 2% chance each frame
+                    spawnEnemy(true);
+                }
+            }
+
+            // Actualizar y dibujar drones
+            gameState.drones = gameState.drones.filter(drone => {
+                drone.time += gameState.deltaTime;
+                drone.y += drone.speed * gameState.deltaTime;
+
+                //console.log(drone.x);
+                drone.x = drone.x + drone.amplitude * Math.sin(drone.time * drone.frequency);
+                drone.angle = Math.sin(drone.time * drone.frequency) * 0.3; // Rotación suave
+
+                if (drone.y > canvas.height) {
+                    gameState.enemiesAvoided++;
+                    return false;
+                }
+
+                // Colisión con jugador
+                if (!gameState.immune && checkCollision(gameState.player, drone, 60, 40, 40, 40)) {
+                    gameState.lives--;
+                    crashSound.currentTime = 0;
+                    crashSound.play().catch(console.error);
+                    updateHUD();
+                    if (gameState.lives <= 0) {
+                        endGame();
+                    }
+                    return false;
+                }
+
+                drawDrone(drone);
+                return true;
+            });
+
             // Actualizar y dibujar enemigos
             gameState.enemies = gameState.enemies.filter(enemy => {
                 enemy.y += enemy.speed * gameState.deltaTime;
@@ -909,6 +1022,7 @@
             gameState = {
                 player: { x: 400, y: 500, width: 80, height: 40, speed: 300 },
                 enemies: [],
+                drones: [],
                 selfies: [],
                 allyShips: [],
                 selfieCount: 0,
