@@ -254,7 +254,7 @@
         });
 
         let gameState = {
-            player: { x: 400, y: 500, width: 80, height: 40, speed: 300 },
+            player: { x: 400, y: 500, width: 80, height: 40, speed: 400 },
             enemies: [],
             drones: [],
             selfies: [],
@@ -678,7 +678,7 @@
             ctx.save();
             ctx.translate(drone.x, drone.y);
             ctx.rotate(drone.angle || 0);
-            ctx.drawImage(images.drone, drone.x -20, drone.y -20, 40, 40);
+            ctx.drawImage(images.drone, -20, -20, 40, 40);
             ctx.restore();
         }
         
@@ -715,7 +715,6 @@
                     speed: baseSpeed + speedIncrease + Math.random() * 60
                 });
             } else {
-                //console.log (Math.random() * (canvas.width - 80) + 40)
                 gameState.drones.push({
                     x: Math.random() * (canvas.width - 80) + 40,
                     y: -40,
@@ -745,7 +744,8 @@
             });
         }
         
-        function checkCollision(rect1, rect2, size1W = 60, size1H = 40, size2W = 50, size2H = 40) {
+        function checkCollision(rect1, rect2, size1W = 60, size1H = 40, size2W = 50, size2H = 40, drone) {
+
             return rect1.x - size1W/2 < rect2.x + size2W/2 &&
                    rect1.x + size1W/2 > rect2.x - size2W/2 &&
                    rect1.y - size1H/2 < rect2.y + size2H/2 &&
@@ -922,16 +922,15 @@
                 drone.y += drone.speed * gameState.deltaTime;
 
                 //console.log(drone.x);
-                drone.x = drone.x + drone.amplitude * Math.sin(drone.time * drone.frequency);
-                drone.angle = Math.sin(drone.time * drone.frequency) * 0.3; // Rotación suave
+                drone.x = drone.x - drone.amplitude * Math.sin(drone.time * drone.frequency);
+                drone.angle = Math.sin(drone.time * drone.frequency) * -0.3; // Rotación suave
 
                 if (drone.y > canvas.height) {
-                    gameState.enemiesAvoided++;
                     return false;
                 }
 
                 // Colisión con jugador
-                if (!gameState.immune && checkCollision(gameState.player, drone, 60, 40, 40, 40)) {
+                if (!gameState.immune && checkCollision(gameState.player, drone, 60, 40, 40, 40, true)) {
                     gameState.lives--;
                     crashSound.currentTime = 0;
                     crashSound.play().catch(console.error);
@@ -1020,7 +1019,7 @@
         
         function restartGame() {
             gameState = {
-                player: { x: 400, y: 500, width: 80, height: 40, speed: 300 },
+                player: { x: 400, y: 500, width: 80, height: 40, speed: 400 },
                 enemies: [],
                 drones: [],
                 selfies: [],
