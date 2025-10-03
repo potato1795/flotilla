@@ -371,14 +371,32 @@
         function createSunglasses() {
             const canvas = document.createElement('canvas');
             canvas.width = 40;
-            canvas.height = 20;
+            canvas.height = 40;
             const ctx = canvas.getContext('2d');
             
-            // Marco de las gafas
-            ctx.fillStyle = '#009900';
-            ctx.fillRect(5, 5, 30, 20);
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(16, 5, 9, 20);
+            // Centro del sol
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(20, 20, 12, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Rayos del sol
+            ctx.fillStyle = '#FFD700';
+            for (let i = 0; i < 8; i++) {
+                ctx.save();
+                ctx.translate(20, 20);
+                ctx.rotate(i * Math.PI / 4);
+                
+                // Dibujar triángulo
+                ctx.beginPath();
+                ctx.moveTo(12, 0);
+                ctx.lineTo(20, -4);
+                ctx.lineTo(20, 4);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.restore();
+            }
 
             return canvas;
         }
@@ -721,6 +739,7 @@
                     speed: baseSpeed + speedIncrease + Math.random() * 60,
                     angle: drone.angle,
                     time: 0,
+                    direction: Math.random() < 0.5 ? 1 : -1,
                     frequency: 0.02 + Math.random() * 0.03,
                     amplitude:  baseSpeed + speedIncrease + Math.random() * 30 ,
                 });
@@ -922,7 +941,7 @@
                 drone.y += drone.speed * gameState.deltaTime;
 
                 //console.log(drone.x);
-                drone.x = drone.x - drone.amplitude * Math.sin(drone.time * drone.frequency);
+                drone.x = drone.x + (drone.amplitude * Math.sin(drone.time * drone.frequency)*drone.direction);
                 drone.angle = Math.sin(drone.time * drone.frequency) * -0.3; // Rotación suave
 
                 if (drone.y > canvas.height) {
