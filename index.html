@@ -161,19 +161,62 @@
             color: #003399;
         }
     </style>
+    <style>
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        #startButton {
+            background: #004499;
+            color: white;
+            border: 3px solid white;
+            padding: 20px 40px;
+            font-size: 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #startButton:hover {
+            transform: scale(1.1);
+        }
+    </style>
 </head>
 <body>
+    <audio id="bgMusic" loop>
+        <source src="bg.mp3" type="audio/mp3">
+    </audio>
+    <audio id="crashSound">
+        <source src="camera.mp3" type="audio/mp3">
+    </audio>
+    <audio id="cameraSound">
+        <source src="crash.mp3" type="audio/mp3">
+    </audio>
+    <audio id="coinSound">
+        <source src="coin.mp3" type="audio/mp3">
+    </audio>
+    <div id="startScreen">
+        <button id="startButton">NAVEGAR</button>
+    </div>
     <div id="gameContainer">
         <h1>⛴️ FLOTILLA SIMULATOR ⛴️</h1>
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="hud">
             <div class="stat">📷 Selfies: <span id="selfies">0</span></div>
-            <div class="stat">☀️ Puntos Bronceado: <span id="bronceado">0</span></div>
             <div class="stat">❤️ Vidas: <span id="lives">3</span></div>
             <div class="stat">🛡️ Inmunidad: <span id="immunity">OFF</span></div>
         </div>
         <div class="controls">
-            Controles: ⬅️➡️⬆️⬇️ Mover o toca/arrastra para mover | ESPACIO/botón: Activar Inmunidad (requiere puntos bronceado)
+            Controles: ⬅️➡️⬆️⬇️ Mover o toca/arrastra para mover
         </div>
         <div id="mobileControls">
             <button id="immunityButton" disabled>INMUNIDAD 🛡️</button>
@@ -186,16 +229,37 @@
     </div>
 
     <script>
+        // Constantes globales del juego
+        const BASE_PLAYER_SPEED = 300; // pixels per second
+        const BASE_SELFIE_SPEED = 180; // pixels per second
+        const ENEMY_BASE_SPEED = 120; // pixels per second
+        const IMMUNITY_DURATION = 5; // seconds
+        const SELFIE_SPAWN_TIME = 1.5; // seconds
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const bgMusic = document.getElementById('bgMusic');
+        const crashSound = document.getElementById('crashSound');
+        const cameraSound = document.getElementById('cameraSound');
+        const coinSound = document.getElementById('coinSound');
+        let lastTime = Date.now(); // Variable global para el deltaTime
+        let gameStarted = false;
         
+        // Initialize game on start button click
+        document.getElementById('startButton').addEventListener('click', () => {
+            document.getElementById('startScreen').style.display = 'none';
+            gameStarted = true;
+            bgMusic.play().catch(console.error);
+            gameLoop();
+        });
+
         let gameState = {
-            player: { x: 400, y: 500, width: 80, height: 40, speed: 20 },
+            player: { x: 400, y: 500, width: 80, height: 40, speed: 300 },
             enemies: [],
             selfies: [],
             allyShips: [],
+            sunglasses: [],
             selfieCount: 0,
-            bronceadoPoints: 0,
             lives: 3,
             immune: false,
             immuneTimer: 0,
@@ -203,6 +267,7 @@
             score: 0,
             enemySpawnTimer: 0,
             selfieSpawnTimer: 0,
+            sunglassesSpawnTimer: 0,
             difficulty: 1,
             enemiesAvoided: 0
         };
@@ -247,8 +312,24 @@
             enemyShip: null,
             allyShipSpain: null,
             allyShipItaly: null,
-            camera: null
+            camera: null,
+            sunglasses: null
         };
+
+        function createSunglasses() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 40;
+            canvas.height = 20;
+            const ctx = canvas.getContext('2d');
+            
+            // Marco de las gafas
+            ctx.fillStyle = '#009900';
+            ctx.fillRect(5, 5, 30, 20);
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(16, 5, 9, 20);
+
+            return canvas;
+        }
         
         // Crear logo de Instagram
 		function createInstagramLogo() {
@@ -499,13 +580,10 @@
         images.allyShipSpain = createAllyShipSpain();
         images.allyShipItaly = createAllyShipItaly();
         images.camera = createCamera();
+        images.sunglasses = createSunglasses();
         
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
-            if (e.key === ' ' && gameState.bronceadoPoints >= 150 + (difficulty * 2) && !gameState.immune) {
-                e.preventDefault();
-                activateImmunity();
-            }
         });
         
         document.addEventListener('keyup', (e) => {
@@ -513,7 +591,6 @@
         });
         
         function activateImmunity() {
-            gameState.bronceadoPoints -= 150 + (difficulty * 2);
             gameState.immune = true;
             gameState.immuneTimer = 300;
             
@@ -558,18 +635,35 @@
                 selfie.y - 12, 
                 30, 25);
         }
+
+        function drawSunglasses(sunglasses) {
+            ctx.drawImage(images.sunglasses, 
+                sunglasses.x - 20, 
+                sunglasses.y - 10,
+                40, 20);
+        }
         
         function spawnEnemy() {
-            const baseSpeed = 2;
-            const speedIncrease = Math.min(gameState.difficulty * 0.5, 5);
+            const baseSpeed = ENEMY_BASE_SPEED;
+            const speedIncrease = Math.min(gameState.difficulty * 6, 300);
             
             gameState.enemies.push({
                 x: Math.random() * (canvas.width - 80) + 40,
                 y: -40,
-                speed: baseSpeed + speedIncrease + Math.random() * 2
+                speed: baseSpeed + speedIncrease + Math.random() * 60
             });
         }
         
+        function spawnSunglasses() {
+            gameState.sunglasses.push({
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: -20,
+                width: 40,
+                height: 20,
+                speed: BASE_SELFIE_SPEED * 0.8
+            });
+        }
+
         function spawnSelfie() {
             gameState.selfies.push({
                 x: Math.random() * (canvas.width - 60) + 30,
@@ -586,21 +680,22 @@
         
         function updateHUD() {
             document.getElementById('selfies').textContent = gameState.selfieCount;
-            document.getElementById('bronceado').textContent = gameState.bronceadoPoints;
             document.getElementById('lives').textContent = gameState.lives;
             document.getElementById('immunity').textContent = gameState.immune ? 'ON' : 'OFF';
             
             // Update immunity button state
             const immunityButton = document.getElementById('immunityButton');
             const mobileControls = document.getElementById('mobileControls');
-            
-            const canActivate = !gameState.immune && gameState.bronceadoPoints >= 100;
-            immunityButton.disabled = !canActivate;
-            mobileControls.style.opacity = canActivate ? '1' : '0';
+
         }
         
         function gameLoop() {
             if (gameState.gameOver) return;
+
+            // Calcular deltaTime en segundos
+            const currentTime = Date.now();
+            gameState.deltaTime = (currentTime - lastTime) / 1000; // Convertir a segundos
+            lastTime = currentTime;
             
             // Clear canvas
             ctx.fillStyle = '#2f94c0';
@@ -611,8 +706,8 @@
             ctx.lineWidth = 2;
             for (let i = 0; i < 20; i++) {
                 ctx.beginPath();
-                ctx.moveTo(0, i * 40 + (Date.now() / 20) % 40);
-                ctx.lineTo(canvas.width, i * 40 + (Date.now() / 20) % 40);
+                ctx.moveTo(0, i * 40 + (currentTime / 20) % 40);
+                ctx.lineTo(canvas.width, i * 40 + (currentTime / 20) % 40);
                 ctx.stroke();
             }
             // Comprobar si ha pasado suficiente tiempo desde la última tecla
@@ -623,17 +718,20 @@
                 lastKeyPressTime = Date.now();
             }
             
+            // Movement speed is now pixels per second
+            const moveAmount = gameState.player.speed * gameState.deltaTime;
+
             if (keys['ArrowLeft'] && gameState.player.x > 40) {
-                gameState.player.x -= gameState.player.speed;
+                gameState.player.x -= moveAmount;
             }
             if (keys['ArrowRight'] && gameState.player.x < canvas.width - 40) {
-                gameState.player.x += gameState.player.speed;
+                gameState.player.x += moveAmount;
             }
             if (keys['ArrowUp'] && gameState.player.y > 30) {
-                gameState.player.y -= gameState.player.speed;
+                gameState.player.y -= moveAmount;
             }
             if (keys['ArrowDown'] && gameState.player.y < canvas.height - 30) {
-                gameState.player.y += gameState.player.speed;
+                gameState.player.y += moveAmount;
             }
             if (isPointerActive && Date.now() - lastKeyPressTime > 100) {
                 // Smooth movement towards pointer
@@ -641,9 +739,11 @@
                 const dy = pointerY - gameState.player.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distance > gameState.player.speed) {
-                    const moveX = (dx / distance) * gameState.player.speed;
-                    const moveY = (dy / distance) * gameState.player.speed;
+                const moveAmount = gameState.player.speed * gameState.deltaTime;
+                
+                if (distance > moveAmount) {
+                    const moveX = (dx / distance) * moveAmount;
+                    const moveY = (dy / distance) * moveAmount;
                     
                     // Check boundaries
                     if ((moveX < 0 && gameState.player.x > 40) || 
@@ -657,9 +757,9 @@
                 }
             }
             
-            // Actualizar timer de inmunidad
+            // Actualizar timer de inmunidad (basado en segundos)
             if (gameState.immune) {
-                gameState.immuneTimer--;
+                gameState.immuneTimer -= gameState.deltaTime;
                 if (gameState.immuneTimer <= 0) {
                     gameState.immune = false;
                     gameState.allyShips = [];
@@ -673,27 +773,71 @@
                 ship.x = gameState.player.x + (ship.type === 'spain' ? -100 : 100);
             });
             
-            // Spawn enemigos (más rápido con el tiempo)
-            gameState.enemySpawnTimer++;
-            const spawnRate = Math.max(30, 60 - gameState.difficulty * 2);
-            if (gameState.enemySpawnTimer > spawnRate) {
+            // Spawn enemigos (más rápido y más numerosos con el tiempo)
+            if (gameState.elapsedTime === undefined) gameState.elapsedTime = 0;
+            if (gameState.enemySpawnTimer === undefined) gameState.enemySpawnTimer = 0;
+
+            gameState.elapsedTime += gameState.deltaTime;
+            gameState.enemySpawnTimer += gameState.deltaTime;
+
+            // Normalizamos tiempo (0 al 1 aprox, suponiendo partida de 5 minutos)
+            const t = Math.min(gameState.elapsedTime / 300, 1);
+
+            // Función sigmoide (0 -> suave, 1 -> rápido)
+            const difficultyCurve = 1 / (1 + Math.exp(-10 * (t - 0.5)));
+
+            // Escalamos el spawnTime (más bajo = más enemigos)
+            const minSpawn = 0.3; // spawn más rápido posible
+            const maxSpawn = 3.0; // spawn más lento al inicio
+
+            const spawnTime = maxSpawn - (maxSpawn - minSpawn) * difficultyCurve;
+
+            gameState.enemySpawnTimer += gameState.deltaTime;
+            console.log(`Spawn Time: ${spawnTime.toFixed(2)}s, Timer: ${gameState.enemySpawnTimer.toFixed(2)}s`);
+            if (gameState.enemySpawnTimer  * 1.2 > spawnTime) {
                 spawnEnemy();
                 gameState.enemySpawnTimer = 0;
             }
-            
+                        
             // Spawn selfies
-            gameState.selfieSpawnTimer++;
-            if (gameState.selfieSpawnTimer > 90) {
+            gameState.selfieSpawnTimer += gameState.deltaTime;
+            if (gameState.selfieSpawnTimer > SELFIE_SPAWN_TIME) {
                 spawnSelfie();
                 gameState.selfieSpawnTimer = 0;
             }
+
+            // Spawn sunglasses
+            gameState.sunglassesSpawnTimer += gameState.deltaTime;
+            if (gameState.sunglassesSpawnTimer > 45) { // 45 seconds
+                spawnSunglasses();
+                gameState.sunglassesSpawnTimer = 0;
+            }
+
+            // Update and draw sunglasses
+            gameState.sunglasses = gameState.sunglasses.filter(sunglasses => {
+                sunglasses.y += sunglasses.speed * gameState.deltaTime;
+                
+                if (sunglasses.y > canvas.height) {
+                    return false;
+                }
+
+                // Check collision with player
+                if (checkCollision(gameState.player, sunglasses, 40, 20, 40, 20)) {
+                    activateImmunity();
+                    coinSound.currentTime = 0;
+                    coinSound.play().catch(console.error);
+                    return false;
+                }
+
+                drawSunglasses(sunglasses);
+                return true;
+            });
             
             // Actualizar y dibujar enemigos
             gameState.enemies = gameState.enemies.filter(enemy => {
-                enemy.y += enemy.speed;
+                enemy.y += enemy.speed * gameState.deltaTime;
                 
                 if (enemy.y > canvas.height) {
-                    gameState.bronceadoPoints += 5;
                     gameState.enemiesAvoided++;
                     
                     // Aumentar dificultad cada 5 enemigos esquivados
@@ -708,6 +852,8 @@
                 // Colisión con jugador
                 if (!gameState.immune && checkCollision(gameState.player, enemy, 60, 40, 50, 40)) {
                     gameState.lives--;
+                    crashSound.currentTime = 0;
+                    crashSound.play().catch(console.error);
                     updateHUD();
                     if (gameState.lives <= 0) {
                         endGame();
@@ -721,13 +867,15 @@
             
             // Actualizar y dibujar selfies
             gameState.selfies = gameState.selfies.filter(selfie => {
-                selfie.y += 3;
+                selfie.y += BASE_SELFIE_SPEED * gameState.deltaTime;
                 
                 if (selfie.y > canvas.height) return false;
                 
                 // Colisión con jugador
                 if (checkCollision(gameState.player, selfie, 60, 40, 25, 20)) {
                     gameState.selfieCount++;
+                    cameraSound.currentTime = 0;
+                    cameraSound.play().catch(console.error);
                     updateHUD();
                     return false;
                 }
@@ -759,12 +907,11 @@
         
         function restartGame() {
             gameState = {
-                player: { x: 400, y: 500, width: 80, height: 40, speed: 20 },
+                player: { x: 400, y: 500, width: 80, height: 40, speed: 300 },
                 enemies: [],
                 selfies: [],
                 allyShips: [],
                 selfieCount: 0,
-                bronceadoPoints: 0,
                 lives: 3,
                 immune: false,
                 immuneTimer: 0,
@@ -778,36 +925,27 @@
             
             document.getElementById('gameOver').style.display = 'none';
             updateHUD();
-            gameLoop();
+            if (gameStarted) {
+                bgMusic.currentTime = 0;
+                bgMusic.play().catch(console.error);
+                gameLoop();
+            }
         }
         
         function activateImmunity() {
-            if (gameState.bronceadoPoints >= 100 && !gameState.immune) {
-                gameState.bronceadoPoints -= 100;
-                gameState.immune = true;
-                gameState.immuneTimer = 300;
-                gameState.allyShips = [
-                    { type: 'spain', x: gameState.player.x - 100, y: gameState.player.y },
-                    { type: 'italy', x: gameState.player.x + 100, y: gameState.player.y }
-                ];
-                updateHUD();
-            }
+            gameState.immune = true;
+            gameState.immuneTimer = IMMUNITY_DURATION;
+            gameState.allyShips = [
+                { type: 'spain', x: gameState.player.x - 100, y: gameState.player.y },
+                { type: 'italy', x: gameState.player.x + 100, y: gameState.player.y }
+            ];
+            
+            updateHUD();
+            
         }
 
-        // Setup immunity button and spacebar
-        document.getElementById('immunityButton').addEventListener('click', activateImmunity);
-        
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.repeat) {
-                if (gameState.bronceadoPoints >= 100 && !gameState.immune) {
-                    activateImmunity();
-                }
-            }
-        });
-
-        // Iniciar juego
+        // Initialize HUD
         updateHUD();
-        gameLoop();
     </script>
 </body>
 </html>
