@@ -39,6 +39,20 @@
             max-width: 800px;
             touch-action: none;
         }
+
+        #gameTime {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 255, 0.1);
+            padding: 8px 12px;
+            border: 2px solid #004499;
+            border-radius: 5px;
+            font-size: 18px;
+            color: #004499;
+            font-weight: bold;
+            z-index: 1000;
+        }
         
         #hud {
             margin-top: 10px;
@@ -214,6 +228,7 @@
             <div class="stat">📷 Selfies: <span id="selfies">0</span></div>
             <div class="stat">❤️ Vidas: <span id="lives">3</span></div>
             <div class="stat">🛡️ Inmunidad: <span id="immunity">OFF</span></div>
+            <div class="stat">⏱️ Tiempo: <span id="gameTime">0:00</span></div>
         </div>
         <div class="controls">
             Controles: ⬅️➡️⬆️⬇️ Mover o toca/arrastra para mover
@@ -1026,13 +1041,25 @@
                 ctx.drawImage(images.instagramLogo, 20 + i * 50, 20, 40, 40);
             }
             
+            // Actualizar el tiempo en sincronía con el renderizado
+            const minutes = Math.floor(gameState.gameTime / 60);
+            const seconds = Math.floor(gameState.gameTime % 60);
+            const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            const timeElement = document.getElementById('gameTime');
+            if (timeElement.textContent !== timeString) {
+                timeElement.textContent = timeString;
+            }
+            
             requestAnimationFrame(gameLoop);
         }
         
         function endGame() {
             gameState.gameOver = true;
+            const minutes = Math.floor(gameState.gameTime / 60);
+            const seconds = Math.floor(gameState.gameTime % 60);
+            const timeString = `${minutes}:${seconds.toString().padStart(2, '0')}`;
             document.getElementById('finalScore').textContent = 
-                `¡Has recolectado ${gameState.selfieCount} selfies!`;
+                `¡Has recolectado ${gameState.selfieCount} selfies en ${timeString}!`;
             document.getElementById('gameOver').style.display = 'block';
         }
         
