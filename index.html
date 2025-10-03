@@ -502,7 +502,7 @@
         
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
-            if (e.key === ' ' && gameState.bronceadoPoints >= 100 + (difficulty * 2) && !gameState.immune) {
+            if (e.key === ' ' && gameState.bronceadoPoints >= 150 + (difficulty * 2) && !gameState.immune) {
                 e.preventDefault();
                 activateImmunity();
             }
@@ -513,7 +513,7 @@
         });
         
         function activateImmunity() {
-            gameState.bronceadoPoints -= 100 + (difficulty * 2);
+            gameState.bronceadoPoints -= 150 + (difficulty * 2);
             gameState.immune = true;
             gameState.immuneTimer = 300;
             
@@ -759,7 +759,7 @@
         
         function restartGame() {
             gameState = {
-                player: { x: 400, y: 500, width: 80, height: 40, speed: 5 },
+                player: { x: 400, y: 500, width: 80, height: 40, speed: 10 },
                 enemies: [],
                 selfies: [],
                 allyShips: [],
