@@ -264,6 +264,7 @@
         document.getElementById('startButton').addEventListener('click', () => {
             document.getElementById('startScreen').style.display = 'none';
             gameStarted = true;
+            gameState.gameTime = 0;
             bgMusic.play().catch(console.error);
             gameLoop();
         });
